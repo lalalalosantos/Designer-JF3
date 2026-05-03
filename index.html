@@ -16,8 +16,10 @@
 <body class="bg-black text-white antialiased">
 
     <script>
-        // PENTING: Ganti dengan URL Web App Anda
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxFZdRf-ehkqtuJj4rtKVc4knE9yU_FEDCaPDkysVJi1R3C_REdI_DG2J4PVLbQ61pT/exec";
+        /**
+         * PENTING: Ganti teks di bawah ini dengan URL Web App BARU yang Anda dapatkan setelah New Deployment.
+         */
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzCQyu9sdQebH85oIJOVQtfvghMRtg6w7mu4jSv6Yoy0uG_UtWPpeB-6JdwBLpEUh2T/exec";
 
         const AVAILABLE_SLOTS = [
             { id: 'd1-s1', date: 'July 24, 2026', time: '10:00 AM - 10:30 AM' },
@@ -29,7 +31,7 @@
             { id: 'd3-s1', date: 'July 26, 2026', time: '11:00 AM - 11:30 AM' },
         ];
 
-        let bookedSlots = []; // Akan diisi dari Google Sheets
+        let bookedSlots = []; 
     </script>
 
     <div id="app"></div>
@@ -45,10 +47,18 @@
             isLoadingSlots = true;
             render();
             try {
-                const response = await fetch(GOOGLE_SCRIPT_URL);
-                bookedSlots = await response.json();
+                // Tambahkan parameter ?t=RANDOM agar Google tidak memberikan data cache lama
+                const cacheBuster = `?t=${new Date().getTime()}`;
+                const response = await fetch(GOOGLE_SCRIPT_URL + cacheBuster);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Normalisasi data agar tidak ada spasi yang mengganggu saat pencocokan
+                    bookedSlots = Array.isArray(data) ? data.map(s => s.trim()) : [];
+                    console.log("Jadwal terisi:", bookedSlots);
+                }
             } catch (err) {
-                console.error("Gagal mengambil data jadwal terpakai:", err);
+                console.error("Gagal sinkronisasi data:", err);
             } finally {
                 isLoadingSlots = false;
                 render();
@@ -82,8 +92,8 @@
                             <h2 class="text-3xl font-bold mb-8">Reservation Form</h2>
                             
                             ${isLoadingSlots ? `
-                                <div class="flex items-center gap-2 text-red-600 font-medium mb-4">
-                                    <i data-lucide="loader-2" class="animate-spin"></i> Checking availability...
+                                <div class="flex items-center gap-2 text-red-600 font-medium mb-6 bg-red-50 p-3 rounded-lg animate-pulse">
+                                    <i data-lucide="loader-2" class="animate-spin"></i> Syncing availability with database...
                                 </div>
                             ` : ''}
 
@@ -98,19 +108,20 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-bold uppercase tracking-widest mb-2 text-gray-400">Schedule Availability</label>
-                                    <select required onchange="updateData('slotId', this.value)" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none bg-white cursor-pointer">
+                                    <select required id="slot-select" onchange="updateData('slotId', this.value)" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none bg-white cursor-pointer">
                                         <option value="">Choose a date & time...</option>
                                         ${AVAILABLE_SLOTS.map(slot => {
-                                            const isBooked = bookedSlots.includes(`${slot.date}|${slot.time}`);
-                                            return `<option value="${slot.id}" ${isBooked ? 'disabled class="bg-gray-100 text-gray-400"' : ''} ${formData.slotId === slot.id ? 'selected' : ''}>
-                                                ${slot.date} | ${slot.time} ${isBooked ? '(TAKEN)' : ''}
+                                            const slotString = `${slot.date}|${slot.time}`.trim();
+                                            const isBooked = bookedSlots.includes(slotString);
+                                            return `<option value="${slot.id}" ${isBooked ? 'disabled class="bg-gray-200 text-gray-400 font-italic"' : ''} ${formData.slotId === slot.id ? 'selected' : ''}>
+                                                ${slot.date} | ${slot.time} ${isBooked ? '— [TAKEN]' : ''}
                                             </option>`;
                                         }).join('')}
                                     </select>
-                                    <p class="text-[10px] mt-2 text-gray-400">* Jadwal yang sudah dipilih orang lain akan otomatis terkunci (TAKEN).</p>
+                                    <p class="text-[10px] mt-2 text-gray-400 italic">* Protected slots are already reserved and cannot be selected.</p>
                                 </div>
                                 <button type="submit" ${isSubmitting || isLoadingSlots ? 'disabled' : ''} class="w-full bg-black text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
-                                    ${isSubmitting ? '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> Processing...' : 'Confirm Booking'}
+                                    ${isSubmitting ? '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> Processing Reservation...' : 'Confirm Booking'}
                                 </button>
                             </form>
                         </div>
@@ -148,19 +159,31 @@
             
             isSubmitting = true; render();
             const slot = AVAILABLE_SLOTS.find(s => s.id === formData.slotId);
-            const data = { name: formData.name, brand: formData.brand, date: slot.date, time: slot.time, timestamp: new Date().toLocaleString() };
+            const data = { 
+                name: formData.name, 
+                brand: formData.brand, 
+                date: slot.date, 
+                time: slot.time, 
+                timestamp: new Date().toLocaleString() 
+            };
 
             try {
-                // Mengirim data
+                // Kirim data ke Google Sheets
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                currentPage = 'success';
+                
+                // Beri waktu sebentar agar Google Sheets selesai menulis sebelum sukses
+                setTimeout(() => {
+                    currentPage = 'success';
+                    render();
+                }, 500);
+
             } catch (err) {
-                alert("Gagal mengirim data. Cek koneksi Anda.");
+                alert("Gagal mengirim data. Silakan coba lagi.");
             } finally { isSubmitting = false; render(); }
         }
         render();
