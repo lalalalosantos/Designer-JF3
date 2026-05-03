@@ -17,7 +17,7 @@
 
     <script>
         /**
-         * PENTING: Ganti teks di bawah ini dengan URL Web App BARU yang Anda dapatkan setelah New Deployment.
+         * PENTING: Pastikan URL ini adalah URL Web App dari 'New Deployment' terbaru Anda.
          */
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzCQyu9sdQebH85oIJOVQtfvghMRtg6w7mu4jSv6Yoy0uG_UtWPpeB-6JdwBLpEUh2T/exec";
 
@@ -42,20 +42,24 @@
         let isLoadingSlots = false;
         let formData = { name: '', brand: '', slotId: '' };
 
+        // Fungsi untuk membersihkan teks agar mudah dicocokkan (Hapus spasi & kecilkan huruf)
+        function cleanString(str) {
+            return String(str).toLowerCase().replace(/\s+/g, '').trim();
+        }
+
         async function fetchBookedSlots() {
             if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("MASUKKAN_URL")) return;
             isLoadingSlots = true;
             render();
             try {
-                // Tambahkan parameter ?t=RANDOM agar Google tidak memberikan data cache lama
                 const cacheBuster = `?t=${new Date().getTime()}`;
                 const response = await fetch(GOOGLE_SCRIPT_URL + cacheBuster);
                 
                 if (response.ok) {
                     const data = await response.json();
-                    // Normalisasi data agar tidak ada spasi yang mengganggu saat pencocokan
-                    bookedSlots = Array.isArray(data) ? data.map(s => s.trim()) : [];
-                    console.log("Jadwal terisi:", bookedSlots);
+                    // Simpan data dari Sheets yang sudah dibersihkan formatnya
+                    bookedSlots = Array.isArray(data) ? data.map(s => cleanString(s)) : [];
+                    console.log("Cleaned Booked Slots from Sheets:", bookedSlots);
                 }
             } catch (err) {
                 console.error("Gagal sinkronisasi data:", err);
@@ -93,7 +97,7 @@
                             
                             ${isLoadingSlots ? `
                                 <div class="flex items-center gap-2 text-red-600 font-medium mb-6 bg-red-50 p-3 rounded-lg animate-pulse">
-                                    <i data-lucide="loader-2" class="animate-spin"></i> Syncing availability with database...
+                                    <i data-lucide="loader-2" class="animate-spin"></i> Memvalidasi jadwal di database...
                                 </div>
                             ` : ''}
 
@@ -109,19 +113,20 @@
                                 <div>
                                     <label class="block text-xs font-bold uppercase tracking-widest mb-2 text-gray-400">Schedule Availability</label>
                                     <select required id="slot-select" onchange="updateData('slotId', this.value)" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none bg-white cursor-pointer">
-                                        <option value="">Choose a date & time...</option>
+                                        <option value="">Pilih tanggal & waktu...</option>
                                         ${AVAILABLE_SLOTS.map(slot => {
-                                            const slotString = `${slot.date}|${slot.time}`.trim();
-                                            const isBooked = bookedSlots.includes(slotString);
-                                            return `<option value="${slot.id}" ${isBooked ? 'disabled class="bg-gray-200 text-gray-400 font-italic"' : ''} ${formData.slotId === slot.id ? 'selected' : ''}>
-                                                ${slot.date} | ${slot.time} ${isBooked ? '— [TAKEN]' : ''}
+                                            const currentSlotString = cleanString(`${slot.date}|${slot.time}`);
+                                            const isBooked = bookedSlots.includes(currentSlotString);
+                                            
+                                            return `<option value="${slot.id}" ${isBooked ? 'disabled class="bg-gray-100 text-gray-400"' : ''} ${formData.slotId === slot.id ? 'selected' : ''}>
+                                                ${slot.date} | ${slot.time} ${isBooked ? '— [FULL]' : ''}
                                             </option>`;
                                         }).join('')}
                                     </select>
-                                    <p class="text-[10px] mt-2 text-gray-400 italic">* Protected slots are already reserved and cannot be selected.</p>
+                                    <p class="text-[10px] mt-2 text-gray-400 italic">* Jadwal yang bertanda [FULL] sudah dipesan oleh brand lain.</p>
                                 </div>
                                 <button type="submit" ${isSubmitting || isLoadingSlots ? 'disabled' : ''} class="w-full bg-black text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
-                                    ${isSubmitting ? '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> Processing Reservation...' : 'Confirm Booking'}
+                                    ${isSubmitting ? '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> Mengirim Data...' : 'Konfirmasi Booking'}
                                 </button>
                             </form>
                         </div>
@@ -132,13 +137,13 @@
                 app.innerHTML = `
                     <div class="min-h-screen flex flex-col items-center justify-center bg-white text-black px-6 text-center fade-in">
                         <i data-lucide="check-circle" class="w-16 h-16 text-green-500 mb-6"></i>
-                        <h1 class="text-3xl font-bold mb-2 uppercase">Booking Successful</h1>
+                        <h1 class="text-3xl font-bold mb-2 uppercase">Booking Berhasil</h1>
                         <p class="text-gray-500 mb-8 font-bold">${formData.brand} - ${formData.name}</p>
                         <div class="bg-gray-50 p-6 rounded-2xl w-full max-w-sm mb-10 text-left border border-gray-100">
                             <div class="flex items-center gap-3 text-sm mb-2"><i data-lucide="calendar" class="text-red-600"></i> ${slot?.date}</div>
                             <div class="flex items-center gap-3 text-sm"><i data-lucide="clock" class="text-red-600"></i> ${slot?.time}</div>
                         </div>
-                        <button onclick="location.reload()" class="text-red-600 font-bold hover:underline">Make another booking</button>
+                        <button onclick="location.reload()" class="text-red-600 font-bold hover:underline">Buat Booking Lain</button>
                     </div>
                 `;
             }
@@ -168,7 +173,6 @@
             };
 
             try {
-                // Kirim data ke Google Sheets
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -176,14 +180,13 @@
                     body: JSON.stringify(data)
                 });
                 
-                // Beri waktu sebentar agar Google Sheets selesai menulis sebelum sukses
                 setTimeout(() => {
                     currentPage = 'success';
                     render();
-                }, 500);
+                }, 800);
 
             } catch (err) {
-                alert("Gagal mengirim data. Silakan coba lagi.");
+                alert("Koneksi gagal. Coba lagi.");
             } finally { isSubmitting = false; render(); }
         }
         render();
