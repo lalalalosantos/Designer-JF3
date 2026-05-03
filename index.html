@@ -15,9 +15,9 @@
 </head>
 <body class="bg-black text-white antialiased">
 
-    <!-- PENTING: Ganti URL di bawah ini dengan URL Web App dari Google Apps Script Anda -->
     <script>
-        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzlqZxsA8piBb_tgFfO1kis-KeJr34qTg8gwI1b_j0dnlShyuiMqAfwL8VZB-w2n4SB/exec";
+        // PENTING: Ganti dengan URL Web App Anda
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxFZdRf-ehkqtuJj4rtKVc4knE9yU_FEDCaPDkysVJi1R3C_REdI_DG2J4PVLbQ61pT/exec";
 
         const AVAILABLE_SLOTS = [
             { id: 'd1-s1', date: 'July 24, 2026', time: '10:00 AM - 10:30 AM' },
@@ -28,16 +28,32 @@
             { id: 'd2-s3', date: 'July 25, 2026', time: '03:30 PM - 04:00 PM' },
             { id: 'd3-s1', date: 'July 26, 2026', time: '11:00 AM - 11:30 AM' },
         ];
+
+        let bookedSlots = []; // Akan diisi dari Google Sheets
     </script>
 
-    <div id="app">
-        <!-- Konten akan diisi oleh JavaScript -->
-    </div>
+    <div id="app"></div>
 
     <script>
         let currentPage = 'landing';
         let isSubmitting = false;
+        let isLoadingSlots = false;
         let formData = { name: '', brand: '', slotId: '' };
+
+        async function fetchBookedSlots() {
+            if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("MASUKKAN_URL")) return;
+            isLoadingSlots = true;
+            render();
+            try {
+                const response = await fetch(GOOGLE_SCRIPT_URL);
+                bookedSlots = await response.json();
+            } catch (err) {
+                console.error("Gagal mengambil data jadwal terpakai:", err);
+            } finally {
+                isLoadingSlots = false;
+                render();
+            }
+        }
 
         function render() {
             const app = document.getElementById('app');
@@ -51,59 +67,50 @@
                             Media Interview <br/>
                             <span class="text-red-600">Availability</span>
                         </h1>
-                        <p class="text-gray-400 max-w-lg mb-10 text-lg font-light">
-                            Welcome, Designers. Please secure your time slot for the exclusive media interview session.
-                        </p>
-                        <button onclick="navigateTo('form')" class="bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-10 rounded-full transition-all flex items-center gap-2 group shadow-lg shadow-red-600/20 mx-auto">
+                        <button onclick="goToForm()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-4 px-10 rounded-full transition-all flex items-center gap-2 mx-auto shadow-lg shadow-red-600/20">
                             Book Your Session <i data-lucide="arrow-right"></i>
                         </button>
                     </div>
                 `;
             } else if (currentPage === 'form') {
                 app.innerHTML = `
-                    <div class="min-h-screen bg-white text-black py-16 px-6 fade-in">
+                    <div class="min-h-screen bg-white text-black py-16 px-6 fade-in text-left">
                         <div class="max-w-xl mx-auto">
-                            <button onclick="navigateTo('landing')" class="text-gray-400 hover:text-black mb-8 flex items-center gap-1">
-                                <i data-lucide="chevron-left"></i> Back to home
+                            <button onclick="navigateTo('landing')" class="text-gray-400 hover:text-black mb-8 flex items-center gap-1 transition-colors">
+                                <i data-lucide="chevron-left" class="w-4 h-4"></i> Back to home
                             </button>
-                            <h2 class="text-3xl font-bold mb-2">Reservation Form</h2>
-                            <p class="text-gray-500 mb-8">Please fill in your details to secure the interview slot.</p>
+                            <h2 class="text-3xl font-bold mb-8">Reservation Form</h2>
+                            
+                            ${isLoadingSlots ? `
+                                <div class="flex items-center gap-2 text-red-600 font-medium mb-4">
+                                    <i data-lucide="loader-2" class="animate-spin"></i> Checking availability...
+                                </div>
+                            ` : ''}
 
                             <form onsubmit="handleBooking(event)" class="space-y-8">
                                 <div>
-                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2 text-gray-400">
-                                        <i data-lucide="user" class="w-4 h-4 text-red-600"></i> Full Name
-                                    </label>
-                                    <input required type="text" id="name" placeholder="Your professional name" 
-                                        class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none transition-colors"
-                                        oninput="updateData('name', this.value)" value="${formData.name}">
+                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 text-gray-400">Full Name</label>
+                                    <input required type="text" oninput="updateData('name', this.value)" value="${formData.name}" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2 text-gray-400">
-                                        <i data-lucide="briefcase" class="w-4 h-4 text-red-600"></i> Brand Name
-                                    </label>
-                                    <input required type="text" id="brand" placeholder="e.g. LUXE COUTURE" 
-                                        class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none transition-colors"
-                                        oninput="updateData('brand', this.value)" value="${formData.brand}">
+                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 text-gray-400">Brand Name</label>
+                                    <input required type="text" oninput="updateData('brand', this.value)" value="${formData.brand}" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none">
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2 text-gray-400">
-                                        <i data-lucide="calendar" class="w-4 h-4 text-red-600"></i> Schedule Availability
-                                    </label>
-                                    <select required id="slotId" 
-                                        class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none bg-white transition-colors"
-                                        onchange="updateData('slotId', this.value)">
+                                    <label class="block text-xs font-bold uppercase tracking-widest mb-2 text-gray-400">Schedule Availability</label>
+                                    <select required onchange="updateData('slotId', this.value)" class="w-full border-b-2 border-gray-100 p-3 focus:border-red-600 outline-none bg-white cursor-pointer">
                                         <option value="">Choose a date & time...</option>
-                                        ${AVAILABLE_SLOTS.map(slot => `
-                                            <option value="${slot.id}" ${formData.slotId === slot.id ? 'selected' : ''}>
-                                                ${slot.date} | ${slot.time}
-                                            </option>
-                                        `).join('')}
+                                        ${AVAILABLE_SLOTS.map(slot => {
+                                            const isBooked = bookedSlots.includes(`${slot.date}|${slot.time}`);
+                                            return `<option value="${slot.id}" ${isBooked ? 'disabled class="bg-gray-100 text-gray-400"' : ''} ${formData.slotId === slot.id ? 'selected' : ''}>
+                                                ${slot.date} | ${slot.time} ${isBooked ? '(TAKEN)' : ''}
+                                            </option>`;
+                                        }).join('')}
                                     </select>
+                                    <p class="text-[10px] mt-2 text-gray-400">* Jadwal yang sudah dipilih orang lain akan otomatis terkunci (TAKEN).</p>
                                 </div>
-                                <button type="submit" ${isSubmitting ? 'disabled' : ''} 
-                                    class="w-full bg-black hover:bg-gray-900 text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50">
-                                    ${isSubmitting ? 'Processing...' : 'Confirm Booking'}
+                                <button type="submit" ${isSubmitting || isLoadingSlots ? 'disabled' : ''} class="w-full bg-black text-white font-bold py-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50">
+                                    ${isSubmitting ? '<i data-lucide="loader-2" class="animate-spin w-5 h-5"></i> Processing...' : 'Confirm Booking'}
                                 </button>
                             </form>
                         </div>
@@ -113,64 +120,38 @@
                 const slot = AVAILABLE_SLOTS.find(s => s.id === formData.slotId);
                 app.innerHTML = `
                     <div class="min-h-screen flex flex-col items-center justify-center bg-white text-black px-6 text-center fade-in">
-                        <div class="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center mb-6">
-                            <i data-lucide="check-circle" class="w-10 h-10"></i>
+                        <i data-lucide="check-circle" class="w-16 h-16 text-green-500 mb-6"></i>
+                        <h1 class="text-3xl font-bold mb-2 uppercase">Booking Successful</h1>
+                        <p class="text-gray-500 mb-8 font-bold">${formData.brand} - ${formData.name}</p>
+                        <div class="bg-gray-50 p-6 rounded-2xl w-full max-w-sm mb-10 text-left border border-gray-100">
+                            <div class="flex items-center gap-3 text-sm mb-2"><i data-lucide="calendar" class="text-red-600"></i> ${slot?.date}</div>
+                            <div class="flex items-center gap-3 text-sm"><i data-lucide="clock" class="text-red-600"></i> ${slot?.time}</div>
                         </div>
-                        <h1 class="text-3xl font-bold mb-2 uppercase tracking-tight">Booking Successful</h1>
-                        <p class="text-gray-500 mb-8 max-w-sm">
-                            Thank you, ${formData.name}. Your session for <span class="font-bold text-black">${formData.brand}</span> has been confirmed.
-                        </p>
-                        <div class="bg-gray-50 p-6 rounded-2xl w-full max-w-sm mb-10 text-left space-y-3 border border-gray-100 shadow-sm">
-                            <div class="flex items-center gap-3 text-sm font-semibold text-gray-700">
-                                <i data-lucide="calendar" class="w-4 h-4 text-red-600"></i> ${slot?.date}
-                            </div>
-                            <div class="flex items-center gap-3 text-sm font-semibold text-gray-700">
-                                <i data-lucide="clock" class="w-4 h-4 text-red-600"></i> ${slot?.time}
-                            </div>
-                        </div>
-                        <div class="flex flex-col gap-4 w-full max-w-sm">
-                            <a href="https://jf3.co.id" target="_blank" class="bg-black text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors">
-                                Track JF3 Schedule <i data-lucide="external-link" class="w-4 h-4"></i>
-                            </a>
-                            <button onclick="location.reload()" class="text-gray-400 text-sm hover:text-black transition-colors">
-                                Make another booking
-                            </button>
-                        </div>
+                        <button onclick="location.reload()" class="text-red-600 font-bold hover:underline">Make another booking</button>
                     </div>
                 `;
             }
             lucide.createIcons();
         }
 
-        function navigateTo(page) {
-            currentPage = page;
-            render();
+        async function goToForm() {
+            navigateTo('form');
+            await fetchBookedSlots();
         }
 
-        function updateData(key, value) {
-            formData[key] = value;
-        }
+        function navigateTo(page) { currentPage = page; render(); }
+        function updateData(key, value) { formData[key] = value; }
 
         async function handleBooking(e) {
             e.preventDefault();
-            if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("MASUKKAN_URL")) {
-                alert("Error: URL Google Script belum dipasang di kode.");
-                return;
-            }
-
-            isSubmitting = true;
-            render();
-
+            if (!GOOGLE_SCRIPT_URL || GOOGLE_SCRIPT_URL.includes("MASUKKAN_URL")) return;
+            
+            isSubmitting = true; render();
             const slot = AVAILABLE_SLOTS.find(s => s.id === formData.slotId);
-            const data = {
-                name: formData.name,
-                brand: formData.brand,
-                date: slot.date,
-                time: slot.time,
-                timestamp: new Date().toLocaleString()
-            };
+            const data = { name: formData.name, brand: formData.brand, date: slot.date, time: slot.time, timestamp: new Date().toLocaleString() };
 
             try {
+                // Mengirim data
                 await fetch(GOOGLE_SCRIPT_URL, {
                     method: 'POST',
                     mode: 'no-cors',
@@ -179,15 +160,9 @@
                 });
                 currentPage = 'success';
             } catch (err) {
-                console.error(err);
-                alert("Submission failed. Please check your connection.");
-            } finally {
-                isSubmitting = false;
-                render();
-            }
+                alert("Gagal mengirim data. Cek koneksi Anda.");
+            } finally { isSubmitting = false; render(); }
         }
-
-        // Jalankan render pertama kali
         render();
     </script>
 </body>
